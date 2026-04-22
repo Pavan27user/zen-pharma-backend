@@ -8,6 +8,7 @@ name: CI/CD — api-gateway
 #   deploy-dev  → direct commit to envs/dev/ → ArgoCD auto-syncs → smoke test
 #   open-qa-pr  → opens a PR in zen-gitops for envs/qa/ (PR merge = QA deployment)
 #
+#
 # PROD promotion → promote-prod.yml (workflow_dispatch)
 
 on:
