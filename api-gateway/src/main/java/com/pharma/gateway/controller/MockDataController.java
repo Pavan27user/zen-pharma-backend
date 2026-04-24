@@ -22,16 +22,6 @@ public class MockDataController {
         ));
     }
 
-    @GetMapping(value = "/qc", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<List<Map<String, Object>>> getQualityControl() {
-        return Mono.just(List.of(
-            Map.of("id", 1, "batchNumber", "BATCH-2024-001", "testType", "Dissolution Test", "result", "PASS", "testedBy", "Dr. Mehta", "testDate", "2024-04-11", "status", "ACTIVE"),
-            Map.of("id", 2, "batchNumber", "BATCH-2024-001", "testType", "Assay Test", "result", "PASS", "testedBy", "Dr. Mehta", "testDate", "2024-04-11", "status", "ACTIVE"),
-            Map.of("id", 3, "batchNumber", "BATCH-2024-002", "testType", "Microbial Test", "result", "PASS", "testedBy", "Dr. Singh", "testDate", "2024-04-13", "status", "ACTIVE"),
-            Map.of("id", 4, "batchNumber", "BATCH-2024-003", "testType", "Dissolution Test", "result", "FAIL", "testedBy", "Dr. Mehta", "testDate", "2024-04-16", "status", "ACTIVE")
-        ));
-    }
-
     @GetMapping(value = "/reports", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<List<Map<String, Object>>> getReports() {
         return Mono.just(List.of(
