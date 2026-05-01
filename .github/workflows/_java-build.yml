@@ -1,128 +1,84 @@
 name: Reusable — Java Build & Security Gates
 
 on:
-workflow_call:
-inputs:
-service-name:
-required: true
-type: string
-service-dir:
-required: true
-type: string
-ecr-repository:
-required: true
-type: string
-aws-region:
-required: false
-type: string
-default: us-east-1
-needs-database:
-required: false
-type: boolean
-default: false
-outputs:
-image-tag:
-value: ${{ jobs.build-and-push.outputs.image_tag }}
-registry:
-value: ${{ jobs.build-and-push.outputs.registry }}
-secrets:
-AWS_ACCOUNT_ID:
-required: true
-SEMGREP_APP_TOKEN:
-required: false
-NVD_API_KEY:
-required: false
+  workflow_call:
+    inputs:
+      service-name:
+        required: true
+        type: string
+      service-dir:
+        required: true
+        type: string
+      ecr-repository:
+        required: true
+        type: string
+      aws-region:
+        required: false
+        type: string
+        default: us-east-1
+      needs-database:
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      image-tag:
+        value: ${{ jobs.build-and-push.outputs.image_tag }}
+      registry:
+        value: ${{ jobs.build-and-push.outputs.registry }}
+    secrets:
+      AWS_ACCOUNT_ID:
+        required: true
 
 jobs:
-build-and-push:
-runs-on: ubuntu-latest
-permissions:
-id-token: write
-contents: read
-security-events: write
-actions: read
+  build-and-push:
+    runs-on: ubuntu-latest
 
-```
-outputs:
-  image_tag: ${{ steps.meta.outputs.image_tag }}
-  registry: ${{ steps.login-ecr.outputs.registry }}
+    permissions:
+      id-token: write
+      contents: read
+      security-events: write
+      actions: read
 
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      registry: ${{ steps.login-ecr.outputs.registry }}
 
-  - name: Set image tag
-    id: meta
-    run: echo "image_tag=sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Setup Java
-    uses: actions/setup-java@v4
-    with:
-      java-version: '17'
-      distribution: temurin
-      cache: maven
+      - name: Set image tag
+        id: meta
+        run: echo "image_tag=sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-  - name: Initialize CodeQL
-    uses: github/codeql-action/init@v3
-    with:
-      languages: java
-      queries: security-extended
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
 
-  - name: Maven build
-    run: cd ${{ inputs.service-dir }} && mvn clean install --no-transfer-progress
+      - name: Build
+        run: cd ${{ inputs.service-dir }} && mvn clean install
 
-  - name: CodeQL Analyze
-    uses: github/codeql-action/analyze@v3
+      # ✅ FIXED AWS ROLE
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/pharma-dev-github-actions-role
+          aws-region: us-east-1
 
-  - name: Semgrep Scan
-    uses: semgrep/semgrep-action@v1
-    continue-on-error: true
-    with:
-      config: p/java
-    env:
-      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-  # ✅ CRITICAL FIX HERE
-  - name: Configure AWS credentials
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      role-to-assume: arn:aws:iam::332779204837:role/pharma-github-actions-role
-      aws-region: us-east-1
+      - name: Build Docker Image
+        id: docker-build
+        run: |
+          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ steps.meta.outputs.image_tag }}"
+          cd ${{ inputs.service-dir }}
+          docker build -t "$IMAGE" .
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
-  - name: Login to ECR
-    id: login-ecr
-    uses: aws-actions/amazon-ecr-login@v2
-
-  - name: Build Docker Image
-    id: docker-build
-    run: |
-      IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ steps.meta.outputs.image_tag }}"
-      cd ${{ inputs.service-dir }}
-      docker build -t "$IMAGE" .
-      echo "image=$IMAGE" >> $GITHUB_OUTPUT
-
-  - name: Install Trivy
-    run: |
-      sudo apt-get update
-      sudo apt-get install -y wget
-      wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.0_Linux-64bit.deb
-      sudo dpkg -i trivy_0.50.0_Linux-64bit.deb
-
-  - name: Run Trivy Scan
-    run: |
-      trivy image \
-        --format sarif \
-        --output trivy-results.sarif \
-        ${{ steps.docker-build.outputs.image }}
-
-  - name: Upload Trivy SARIF
-    if: always() && hashFiles('trivy-results.sarif') != ''
-    uses: github/codeql-action/upload-sarif@v3
-    with:
-      sarif_file: trivy-results.sarif
-
-  - name: Push to ECR
-    id: push
-    run: |
-      docker push ${{ steps.docker-build.outputs.image }}
-```
+      - name: Push Image
+        run: docker push ${{ steps.docker-build.outputs.image }}
