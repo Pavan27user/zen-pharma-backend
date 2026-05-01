@@ -82,11 +82,12 @@ steps:
     env:
       SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
+  # ✅ CRITICAL FIX HERE
   - name: Configure AWS credentials
     uses: aws-actions/configure-aws-credentials@v4
     with:
-      role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/pharma-github-actions-role
-      aws-region: ${{ inputs.aws-region }}
+      role-to-assume: arn:aws:iam::332779204837:role/pharma-github-actions-role
+      aws-region: us-east-1
 
   - name: Login to ECR
     id: login-ecr
@@ -100,7 +101,6 @@ steps:
       docker build -t "$IMAGE" .
       echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
-  # ✅ FIXED TRIVY (manual install ensures SARIF is created)
   - name: Install Trivy
     run: |
       sudo apt-get update
@@ -115,7 +115,6 @@ steps:
         --output trivy-results.sarif \
         ${{ steps.docker-build.outputs.image }}
 
-  # ✅ FIXED UPLOAD (no failure if file missing)
   - name: Upload Trivy SARIF
     if: always() && hashFiles('trivy-results.sarif') != ''
     uses: github/codeql-action/upload-sarif@v3
