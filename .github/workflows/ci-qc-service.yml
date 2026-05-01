@@ -2,7 +2,7 @@ name: CI/CD — qc-service
 
 on:
   push:
-    branches: [develop, 'release/**']
+    branches: [develop, main, 'release/**']
     paths:
       - 'qc-service/**'
       - '.github/workflows/ci-qc-service.yml'
